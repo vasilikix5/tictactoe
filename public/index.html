@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Τρίλιζα</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <h1>Multiplayer Τρίλιζα</h1>
+        <div id="status">Σύνδεση στον server...</div>
+        <div id="board" class="board hidden">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let mySymbol = null;
+        let isMyTurn = false;
+        let currentRoom = null;
+
+        const statusDiv = document.getElementById('status');
+        const boardDiv = document.getElementById('board');
+        const cells = document.querySelectorAll('.cell');
+
+        socket.on('waiting', (msg) => {
+            statusDiv.textContent = msg;
+        });
+
+        socket.on('gameStart', ({ room, symbol, myTurn }) => {
+            currentRoom = room;
+            mySymbol = symbol;
+            isMyTurn = myTurn;
+            boardDiv.classList.remove('hidden');
+            updateStatus();
+        });
+
+        socket.on('moveMade', ({ board, turn }) => {
+            board.forEach((val, idx) => {
+                cells[idx].textContent = val;
+                if (val) cells[idx].classList.add('taken');
+            });
+
+            isMyTurn = (turn === socket.id);
+            if (!checkWinner(board)) {
+                updateStatus();
+            }
+        });
+
+        socket.on('opponentLeft', () => {
+            statusDiv.textContent = "Ο αντίπαλος αποσυνδέθηκε. Παίξατε!";
+            boardDiv.classList.add('disabled');
+        });
+
+        cells.forEach(cell => {
+            cell.addEventListener('click', () => {
+                const index = cell.getAttribute('data-index');
+                if (isMyTurn && !cell.textContent) {
+                    socket.emit('makeMove', { room: currentRoom, index: parseInt(index) });
+                }
+            });
+        });
+
+        function updateStatus() {
+            statusDiv.textContent = isMyTurn ? `Δική σου σειρά (${mySymbol})` : "Σειρά του αντιπάλου...";
+        }
+
+        function checkWinner(board) {
+            const lines = [
+                [0,1,2], [3,4,5], [6,7,8],
+                [0,3,6], [1,4,7], [2,5,8],
+                [0,4,8], [2,4,6]
+            ];
+            for (let line of lines) {
+                const [a, b, c] = line;
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    statusDiv.textContent = board[a] === mySymbol ? "Νίκησες! 🎉" : "Έχασες... 😢";
+                    return true;
+                }
+            }
+            if (!board.includes(null)) {
+                statusDiv.textContent = "Ισοπαλία! 🤝";
+                return true;
+            }
+            return false;
+        }
+    </script>
+</body>
+</html>
